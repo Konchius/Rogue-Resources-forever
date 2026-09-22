@@ -1,0 +1,9 @@
+# Packager output
+.release/
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+*.swp
+*.bak
+*~

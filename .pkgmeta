@@ -1,0 +1,20 @@
+# BigWigsMods packager configuration.
+# Docs: https://github.com/BigWigsMods/packager
+
+# Name of the AddOn folder inside the packaged zip (must match the .toc filename).
+package-as: RogueResources
+
+# Use the hand-written CHANGELOG.md as the release notes on CurseForge, instead of
+# auto-generating one from commit messages.
+manual-changelog:
+  filename: CHANGELOG.md
+  markup-type: markdown
+
+# This AddOn bundles no external libraries.
+enable-nolib-creation: no
+
+# Dev-only files that should NOT ship inside the released zip.
+ignore:
+  - ".github"
+  - ".gitignore"
+  - ".pkgmeta"
