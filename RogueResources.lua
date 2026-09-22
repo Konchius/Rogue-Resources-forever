@@ -128,13 +128,121 @@ local function GetCooldown(spellID)
     end
 end
 
+local function IsSecret(v) return issecretvalue and issecretvalue(v) end
+
+-- Poisons apply as temporary WEAPON ENCHANTS (read via GetWeaponEnchantInfo), not auras.
+local MAINHAND_SLOT, OFFHAND_SLOT = 16, 17
+local FALLBACK_WEAPON_TEX = "Interface\\Icons\\INV_Sword_04"
+
+local function HasWeapon(slot) return GetInventoryItemID and GetInventoryItemID("player", slot) ~= nil end
+local function WeaponTex(slot) return GetInventoryItemTexture and GetInventoryItemTexture("player", slot) end
+
+-- Poison base names the player can choose per weapon (localized elsewhere; enUS here).
+local POISON_TYPES = {
+    "Instant Poison", "Deadly Poison", "Wound Poison", "Mind-numbing Poison", "Crippling Poison",
+}
+local POISON_WORD = "Poison"
+
+-- Find a poison in the bags for the /use macro. With a type ("Deadly Poison") it returns
+-- that type's exact item name (highest rank in bags, e.g. "Deadly Poison V"); with no
+-- type it returns any poison. Plain-text match so hyphens (Mind-numbing) are literal.
+local function FindBagPoison(typeBase)
+    local needle = typeBase or POISON_WORD
+    local best
+    for bag = 0, 4 do
+        local slots = (C_Container and C_Container.GetContainerNumSlots and C_Container.GetContainerNumSlots(bag))
+            or (GetContainerNumSlots and GetContainerNumSlots(bag)) or 0
+        for s = 1, slots do
+            local name
+            if C_Container and C_Container.GetContainerItemInfo then
+                local info = C_Container.GetContainerItemInfo(bag, s)
+                name = info and (info.itemName or (info.hyperlink and info.hyperlink:match("%[(.-)%]")))
+            end
+            if not name and GetContainerItemLink then
+                local link = GetContainerItemLink(bag, s)
+                name = link and link:match("%[(.-)%]")
+            end
+            if name and name:find(needle, 1, true) then
+                -- Prefer the longest name (higher ranks have a " II"/" V" suffix).
+                if not best or #name > #best then best = name end
+            end
+        end
+    end
+    return best
+end
+
+-- Fallback poison detection: scan the weapon's tooltip for the temporary-enchant line
+-- (used when GetWeaponEnchantInfo doesn't report poisons). Returns the line text or nil.
+local function WeaponEnchantText(slot)
+    if C_TooltipInfo and C_TooltipInfo.GetInventoryItem then
+        local data = C_TooltipInfo.GetInventoryItem("player", slot)
+        if data and data.lines then
+            for _, line in ipairs(data.lines) do
+                local t = line.leftText
+                if t and t:find(POISON_WORD) then return t end
+            end
+        end
+    end
+    return nil
+end
+
+local function PoisonKey(b) return (b.slot == MAINHAND_SLOT) and "mh" or "oh" end
+
+-- (Re)arm a weapon button's left-click apply macro. Only armed while LOCKED (so an
+-- unlocked click just repositions, never applies) and out of combat (secure attrs are
+-- locked in combat). Uses the per-weapon poison choice, or any poison if unset.
+local function ArmPoisonButton(b)
+    if InCombatLockdown and InCombatLockdown() then return end
+    RogueResourcesDB.poisonChoice = RogueResourcesDB.poisonChoice or {}
+    local choice = RogueResourcesDB.poisonChoice[PoisonKey(b)]
+    local poison = RogueResourcesDB.locked and FindBagPoison(choice) or nil
+    if poison then
+        b:SetAttribute("type1", "macro")
+        b:SetAttribute("macrotext", "/use " .. poison .. "\n/use " .. b.slot)
+    else
+        b:SetAttribute("type1", nil)
+    end
+end
+
+-- Right-click a weapon button to choose which poison it applies. Saved per weapon.
+local function OpenPoisonMenu(b)
+    RogueResourcesDB.poisonChoice = RogueResourcesDB.poisonChoice or {}
+    local key = PoisonKey(b)
+    local label = (key == "mh") and "Main-hand poison" or "Off-hand poison"
+    if MenuUtil and MenuUtil.CreateContextMenu then
+        MenuUtil.CreateContextMenu(b, function(_, root)
+            root:CreateTitle(label)
+            for _, ptype in ipairs(POISON_TYPES) do
+                local mark = (RogueResourcesDB.poisonChoice[key] == ptype) and "|cff40ff40> |r" or ""
+                root:CreateButton(mark .. ptype, function()
+                    RogueResourcesDB.poisonChoice[key] = ptype
+                    ArmPoisonButton(b)
+                end)
+            end
+            root:CreateDivider()
+            root:CreateButton("Any (first found)", function()
+                RogueResourcesDB.poisonChoice[key] = nil
+                ArmPoisonButton(b)
+            end)
+        end)
+    else   -- fallback: cycle through the types
+        local cur, idx = RogueResourcesDB.poisonChoice[key], 0
+        for i, t in ipairs(POISON_TYPES) do if t == cur then idx = i break end end
+        local nextType = POISON_TYPES[(idx % #POISON_TYPES) + 1]
+        RogueResourcesDB.poisonChoice[key] = nextType
+        ArmPoisonButton(b)
+        print("|cff00ff88RogueResources:|r " .. label .. ": " .. nextType)
+    end
+end
+
 
 -- ---------------------------------------------------------------------------
 -- Saved settings
 -- ---------------------------------------------------------------------------
 RR.defaults = {
     locked      = true,
-    position    = { point = "CENTER", relativePoint = "CENTER", x = 0, y = -200 },
+    position    = { point = "CENTER", relativePoint = "CENTER", x = 0, y = -179 },
+    poisonPos   = { point = "CENTER", relativePoint = "CENTER", x = 144, y = -179 },
     sndMult     = 1.0,  -- Improved Slice and Dice talent multiplier (1.0/1.15/1.30/1.45)
 }
 
@@ -229,6 +337,7 @@ end
 -- True if the player knows any rank of this icon's ability (so we only show learned
 -- skills). IsSpellKnown/IsPlayerSpell are both tried since neither is fully reliable.
 local function IconKnown(o)
+    if o.available then return o.available() end   -- custom check (e.g. poisons)
     if not o.ids then return true end
     for _, id in ipairs(o.ids) do
         if (IsSpellKnown and IsSpellKnown(id)) or (IsPlayerSpell and IsPlayerSpell(id)) then
@@ -254,6 +363,7 @@ local DEFAULT_ORDER = {
 -- saved order, dropping stale keys and appending any new abilities (in default order).
 local function ReconcileOrder(f)
     if type(RogueResourcesDB.iconEnabled) ~= "table" then RogueResourcesDB.iconEnabled = {} end
+    if type(RogueResourcesDB.poisonChoice) ~= "table" then RogueResourcesDB.poisonChoice = {} end
     local saved = type(RogueResourcesDB.iconOrder) == "table" and RogueResourcesDB.iconOrder or {}
     local seen, clean = {}, {}
     for _, key in ipairs(saved) do
@@ -543,6 +653,68 @@ local function BuildUI()
     return f
 end
 
+-- A SEPARATE, independently movable pair of weapon buttons for poisons. Each shows the
+-- equipped weapon's icon, red-pulses when that weapon is unpoisoned, and (via a secure
+-- button) one-click applies a poison from your bags to that weapon.
+local function BuildPoisonFrame(f)
+    local pf = CreateFrame("Frame", nil, UIParent)
+    pf:SetSize(ICON_SIZE * 2 + ICON_GAP, ICON_SIZE)
+    pf:SetMovable(true)
+    pf:SetClampedToScreen(true)
+
+    local function MakeWeaponBtn(slot)
+        local b = CreateFrame("Button", nil, pf, "SecureActionButtonTemplate")
+        b:SetSize(ICON_SIZE, ICON_SIZE)
+        b:RegisterForClicks("AnyDown")   -- fire once on press (both up+down = double-apply)
+        b.slot = slot
+
+        local border = b:CreateTexture(nil, "BACKGROUND")
+        border:SetPoint("TOPLEFT", -1, 1); border:SetPoint("BOTTOMRIGHT", 1, -1)
+        border:SetColorTexture(0, 0, 0, 1)
+        local icon = b:CreateTexture(nil, "ARTWORK")
+        icon:SetAllPoints(b); icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+        local red = b:CreateTexture(nil, "OVERLAY", nil, 4)
+        red:SetAllPoints(b); red:SetColorTexture(1, 0, 0, 1); red:SetBlendMode("ADD"); red:Hide()
+        local pulse = red:CreateAnimationGroup(); pulse:SetLooping("BOUNCE")
+        local a = pulse:CreateAnimation("Alpha")
+        a:SetFromAlpha(0.15); a:SetToAlpha(0.55); a:SetDuration(0.5)
+        local mins = b:CreateFontString(nil, "OVERLAY")
+        mins:SetFont("Fonts\\FRIZQT__.TTF", 11, "OUTLINE"); mins:SetPoint("BOTTOM", 0, 1)
+
+        b.icon, b.red, b.redPulse, b.mins = icon, red, pulse, mins
+
+        -- Right-click opens the poison-choice menu (down only, once).
+        b:SetScript("PostClick", function(self, button, down)
+            if button == "RightButton" and down then OpenPoisonMenu(self) end
+        end)
+
+        -- Left-drag the pair to move it while unlocked; left-click (armed only when
+        -- locked) applies the poison.
+        b:RegisterForDrag("LeftButton")
+        b:SetScript("OnDragStart", function() if not RogueResourcesDB.locked then pf:StartMoving() end end)
+        b:SetScript("OnDragStop", function()
+            pf:StopMovingOrSizing()
+            local p, _, rp, x, y = pf:GetPoint()
+            if p then RogueResourcesDB.poisonPos = { point = p, relativePoint = rp or p, x = x or 0, y = y or 0 } end
+        end)
+        return b
+    end
+
+    local mh = MakeWeaponBtn(MAINHAND_SLOT)
+    mh:SetPoint("LEFT", pf, "LEFT", 0, 0)
+    local oh = MakeWeaponBtn(OFFHAND_SLOT)
+    oh:SetPoint("LEFT", mh, "RIGHT", ICON_GAP, 0)
+
+    f.poisonFrame, f.mhPoison, f.ohPoison = pf, mh, oh
+    return pf
+end
+
+local function ApplyPoisonPosition(f)
+    local pos = RogueResourcesDB.poisonPos or RR.defaults.poisonPos
+    f.poisonFrame:ClearAllPoints()
+    f.poisonFrame:SetPoint(pos.point or "CENTER", UIParent, pos.relativePoint or "CENTER", pos.x or 0, pos.y or 0)
+end
+
 local function UpdateEnergy(f)
     local cur, max = GetEnergy()
     f.bar:SetMinMaxValues(0, max)
@@ -554,6 +726,60 @@ local function UpdateCP(f)
     -- SetValue is whitelisted to accept a secret value; we pass GetCP() through with
     -- no comparison, arithmetic, or boolean test, so this stays taint-safe.
     f.cp:SetValue(GetCP())
+end
+
+-- Update one weapon button: show the equipped weapon's texture, and reflect poison
+-- state. `has` is the present-flag and `exp` the ms remaining (either may be secret,
+-- so we guard). Poisoned -> normal icon + minutes; unpoisoned -> red tint + pulse.
+local function UpdatePoisonIcon(o, on, exp, tip)
+    if not o then return end
+    o.icon:SetTexture(WeaponTex(o.slot) or FALLBACK_WEAPON_TEX)
+    if on then
+        if o.redPulse:IsPlaying() then o.redPulse:Stop() end
+        o.red:Hide()
+        o.icon:SetVertexColor(1, 1, 1)
+        if exp and not IsSecret(exp) and exp > 0 then
+            local m = math.ceil(exp / 60000)          -- ms -> whole minutes (API path)
+            o.mins:SetText(m .. "m")
+            o.mins:SetTextColor(m <= 2 and 1 or 1, m <= 2 and 0.5 or 1, m <= 2 and 0.2 or 1)
+        elseif tip then
+            local n = tonumber(tip:match("(%d+)"))    -- minutes (or charges) from the tooltip line
+            if n and tip:find("[Mm]in") then
+                o.mins:SetText(n .. "m")
+                if n <= 2 then o.mins:SetTextColor(1, 0.5, 0.2) else o.mins:SetTextColor(1, 1, 1) end
+            elseif n then
+                o.mins:SetText(tostring(n))           -- charges or a bare count
+                o.mins:SetTextColor(1, 1, 1)
+            else
+                o.mins:SetText("")
+            end
+        else
+            o.mins:SetText("")
+        end
+    else
+        o.icon:SetVertexColor(1, 0.35, 0.35)
+        o.mins:SetText("")
+        o.red:Show()
+        if not o.redPulse:IsPlaying() then o.redPulse:Play() end
+    end
+end
+
+local function UpdatePoisons(f)
+    if not f.poisonFrame then return end
+    local res = { pcall(GetWeaponEnchantInfo) }   -- ok, hasMH, mhExp, mhChg, mhID, hasOH, ohExp, ...
+    -- Detect via the enchant API OR the weapon tooltip (the API doesn't report poisons
+    -- on this client). Tooltip has no reliable timer, so exp comes only from the API.
+    local mhTip, ohTip = WeaponEnchantText(MAINHAND_SLOT), WeaponEnchantText(OFFHAND_SLOT)
+    local mhOn = (res[1] and res[2] and true) or (mhTip ~= nil)
+    local ohOn = (res[1] and res[6] and true) or (ohTip ~= nil)
+    UpdatePoisonIcon(f.mhPoison, mhOn, res[1] and res[3] or nil, mhTip)
+    UpdatePoisonIcon(f.ohPoison, ohOn, res[1] and res[7] or nil, ohTip)
+    -- Secure-frame changes (Show/Hide, attributes) are only allowed out of combat.
+    if not (InCombatLockdown and InCombatLockdown()) then
+        f.ohPoison:SetShown(HasWeapon(OFFHAND_SLOT))   -- hide OH when not dual-wielding
+        ArmPoisonButton(f.mhPoison)
+        ArmPoisonButton(f.ohPoison)
+    end
 end
 
 -- Cooldowns are tracked by the ability's CAST, not by polling: polling GetSpellCooldown
@@ -641,8 +867,9 @@ local function SetLocked(f, locked)
         f.bar:SetStatusBarColor(1.0, 0.85, 0.10)
     else
         f.bar:SetStatusBarColor(0.10, 0.60, 1.00)   -- blue tint = "movable"
-        print("|cff00ff88RogueResources:|r unlocked — drag to move, /rr lock when done.")
+        print("|cff00ff88RogueResources:|r unlocked — drag the bars and the poison icons; /rr lock when done.")
     end
+    UpdatePoisons(f)   -- (dis)arm the click-to-apply macros for the new lock state
 end
 
 -- ---------------------------------------------------------------------------
@@ -665,6 +892,9 @@ ev:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
 -- Re-lay-out the icon row when spells are learned/leveled, so newly-learned abilities
 -- (Vanish, Blade Flurry, Adrenaline Rush, ...) appear and unknown ones stay hidden.
 ev:RegisterEvent("SPELLS_CHANGED")
+-- Weapon poison changes: applying/removing a poison and swapping weapons.
+ev:RegisterEvent("UNIT_INVENTORY_CHANGED")
+ev:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
 -- Belt-and-suspenders: persist the frame position on logout/reload too, so it never
 -- reverts even if an OnDragStop was somehow missed.
 ev:RegisterEvent("PLAYER_LOGOUT")
@@ -678,12 +908,20 @@ ev:SetScript("OnEvent", function(self, event, arg1, arg2, arg3)
         RogueResourcesDB = ApplyDefaults(RR.defaults, RogueResourcesDB)
         RefreshSpellSets()   -- re-resolve names now that the spellbook is loaded
         frame = BuildUI()
+        BuildPoisonFrame(frame)
         ApplyPosition(frame)
+        ApplyPoisonPosition(frame)
+        frame.poisonFrame:SetShown(not RogueResourcesDB.poisonHidden)
         SetLocked(frame, RogueResourcesDB.locked)
         UpdateEnergy(frame)
         UpdateCP(frame)
         StopSnD(frame)   -- start inactive until the first SnD cast
         PollCooldowns(frame)   -- catch anything already on cooldown at login
+        UpdatePoisons(frame)
+        -- Poll poisons periodically: expiry has no event, so keep the timer/state fresh.
+        if C_Timer and C_Timer.NewTicker then
+            C_Timer.NewTicker(2, function() if frame then UpdatePoisons(frame) end end)
+        end
         return
     end
 
@@ -702,6 +940,8 @@ ev:SetScript("OnEvent", function(self, event, arg1, arg2, arg3)
     elseif event == "SPELLS_CHANGED" then
         LayoutIcons(frame)     -- show/hide icons as abilities are learned
         PollCooldowns(frame)   -- catch any newly-known ability already on cooldown
+    elseif event == "UNIT_INVENTORY_CHANGED" or event == "PLAYER_EQUIPMENT_CHANGED" then
+        UpdatePoisons(frame)   -- poison applied/removed, or weapon swapped (icon + OH show)
     elseif event == "PLAYER_TARGET_CHANGED" then
         UpdateCP(frame)
         cpEstimate = 0   -- combo points are per-target on this build; reset the count
@@ -745,6 +985,15 @@ SlashCmdList.ROGUERESOURCES = function(msg)
         SetLocked(frame, false)
     elseif msg == "options" or msg == "config" or msg == "" then
         ToggleOptions(frame)
+    elseif msg == "poison" or msg == "poisons" then
+        if InCombatLockdown and InCombatLockdown() then
+            print("|cff00ff88RogueResources:|r can't toggle poison icons in combat.")
+        else
+            RogueResourcesDB.poisonHidden = not RogueResourcesDB.poisonHidden
+            frame.poisonFrame:SetShown(not RogueResourcesDB.poisonHidden)
+            print("|cff00ff88RogueResources:|r poison icons " ..
+                (RogueResourcesDB.poisonHidden and "hidden." or "shown."))
+        end
     elseif msg:match("^sndmult") then
         local n = tonumber(msg:match("sndmult(%d+%.?%d*)"))
         if n and n > 0 then
@@ -755,6 +1004,6 @@ SlashCmdList.ROGUERESOURCES = function(msg)
                 .. ". Usage: /rr sndmult 1.45")
         end
     else
-        print("|cff00ff88RogueResources:|r /rr options | unlock | lock | sndmult <1.0-1.45>")
+        print("|cff00ff88RogueResources:|r /rr options | unlock | lock | poison | sndmult <1.0-1.45>")
     end
 end

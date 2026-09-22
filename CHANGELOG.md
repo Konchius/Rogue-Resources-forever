@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.1.0
+
+- Added a weapon poison tracker: a separate, movable pair of icons showing your
+  main-hand and off-hand weapons. Each shows remaining minutes, red-pulses when
+  that weapon is unpoisoned, and — while locked — **left-click applies poison** to
+  that weapon. **Right-click** to choose which poison (Instant / Deadly / Wound /
+  Mind-numbing / Crippling) per weapon. The off-hand icon hides when not
+  dual-wielding. `/rr poison` shows/hides the pair.
+
 ## 1.0.0
 
 - Initial release.
