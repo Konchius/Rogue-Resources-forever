@@ -1,0 +1,31 @@
+name: Package and Release
+
+# Push a version tag (e.g. 1.0.1) to package the addon and upload it to CurseForge.
+on:
+  push:
+    tags:
+      - "**"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history so the packager can build the changelog
+
+      - name: Package and release
+        # Pin/verify the latest ref at https://github.com/BigWigsMods/packager
+        uses: BigWigsMods/packager@v2
+        env:
+          # CurseForge upload. CF_API_KEY is a repo secret; the project id lives in
+          # RogueResources.toc (## X-Curse-Project-ID).
+          CF_API_KEY: ${{ secrets.CF_API_KEY }}
+          # GitHub Releases are intentionally NOT created here (CurseForge is the
+          # distribution channel). Add GITHUB_OAUTH and permissions: contents: write
+          # to enable GitHub Releases.
+          #
+          # Optional extra mirrors — uncomment and add the matching secrets to use.
+          # WOWI_API_TOKEN: ${{ secrets.WOWI_API_TOKEN }}
+          # WAGO_API_TOKEN: ${{ secrets.WAGO_API_TOKEN }}
