@@ -137,49 +137,102 @@ local FALLBACK_WEAPON_TEX = "Interface\\Icons\\INV_Sword_04"
 local function HasWeapon(slot) return GetInventoryItemID and GetInventoryItemID("player", slot) ~= nil end
 local function WeaponTex(slot) return GetInventoryItemTexture and GetInventoryItemTexture("player", slot) end
 
--- Poison base names the player can choose per weapon (localized elsewhere; enUS here).
-local POISON_TYPES = {
-    "Instant Poison", "Deadly Poison", "Wound Poison", "Mind-numbing Poison", "Crippling Poison",
+-- Poison types by internal key + rank-1 item id + English fallback (used only for the
+-- menu when a type isn't carried and can't be resolved yet).
+local POISON_DEFS = {
+    { key = "instant",   id = 6947,  en = "Instant Poison" },
+    { key = "deadly",    id = 2892,  en = "Deadly Poison" },
+    { key = "wound",     id = 10918, en = "Wound Poison" },
+    { key = "mindnumb",  id = 5237,  en = "Mind-numbing Poison" },
+    { key = "crippling", id = 3775,  en = "Crippling Poison" },
 }
-local POISON_WORD = "Poison"
 
--- Find a poison in the bags for the /use macro. With a type ("Deadly Poison") it returns
--- that type's exact item name (highest rank in bags, e.g. "Deadly Poison V"); with no
--- type it returns any poison. Plain-text match so hyphens (Mind-numbing) are literal.
-local function FindBagPoison(typeBase)
-    local needle = typeBase or POISON_WORD
-    local best
+-- Every poison rank's item id -> type key. We identify poisons in bags by ID (identical
+-- in every language) rather than by name, which is what makes this locale-independent.
+local POISON_ID_TO_KEY = {}
+do
+    local ranks = {
+        instant   = { 6947, 6949, 6950, 8926, 8927, 8928 },
+        deadly    = { 2892, 2893, 8984, 8985, 20844, 22053, 22054 },
+        wound     = { 10918, 10920, 10921, 10922 },
+        mindnumb  = { 5237, 6951, 9186 },
+        crippling = { 3775, 3776 },
+    }
+    for key, ids in pairs(ranks) do for _, id in ipairs(ids) do POISON_ID_TO_KEY[id] = key end end
+end
+
+-- Strip a trailing rank numeral (" VI") so "Sofortgift VI" -> "Sofortgift" for matching.
+local function PoisonBase(name) return (name:gsub("%s+[IVXLCDM]+$", "")) end
+
+local poisonName = {}   -- key -> localized base name
+local function RefreshPoisonNames()
+    wipe(poisonName)
+    -- Primary source: read localized names straight off the poison items you carry.
     for bag = 0, 4 do
         local slots = (C_Container and C_Container.GetContainerNumSlots and C_Container.GetContainerNumSlots(bag))
             or (GetContainerNumSlots and GetContainerNumSlots(bag)) or 0
         for s = 1, slots do
-            local name
+            local id, nm
             if C_Container and C_Container.GetContainerItemInfo then
                 local info = C_Container.GetContainerItemInfo(bag, s)
-                name = info and (info.itemName or (info.hyperlink and info.hyperlink:match("%[(.-)%]")))
+                if info then id = info.itemID; nm = info.itemName or (info.hyperlink and info.hyperlink:match("%[(.-)%]")) end
+            end
+            local key = id and POISON_ID_TO_KEY[id]
+            if key and nm then poisonName[key] = PoisonBase(nm) end
+        end
+    end
+    -- Fallback (menu display for types you aren't carrying): resolve rank 1 by id.
+    for _, d in ipairs(POISON_DEFS) do
+        if not poisonName[d.key] then
+            local n = GetItemInfo and GetItemInfo(d.id)
+            poisonName[d.key] = n and PoisonBase(n) or d.en
+            if not n and C_Item and C_Item.RequestLoadItemDataByID then C_Item.RequestLoadItemDataByID(d.id) end
+        end
+    end
+end
+RefreshPoisonNames()
+
+-- Find a poison in the bags for the /use macro, identified by item id (locale-free). With
+-- a type key it returns that type's highest-rank item name; with none, any poison.
+local function FindBagPoison(typeKey)
+    local bestName, bestID
+    for bag = 0, 4 do
+        local slots = (C_Container and C_Container.GetContainerNumSlots and C_Container.GetContainerNumSlots(bag))
+            or (GetContainerNumSlots and GetContainerNumSlots(bag)) or 0
+        for s = 1, slots do
+            local id, name
+            if C_Container and C_Container.GetContainerItemInfo then
+                local info = C_Container.GetContainerItemInfo(bag, s)
+                if info then id = info.itemID; name = info.itemName or (info.hyperlink and info.hyperlink:match("%[(.-)%]")) end
             end
             if not name and GetContainerItemLink then
                 local link = GetContainerItemLink(bag, s)
                 name = link and link:match("%[(.-)%]")
+                id = link and tonumber(link:match("item:(%d+)"))
             end
-            if name and name:find(needle, 1, true) then
-                -- Prefer the longest name (higher ranks have a " II"/" V" suffix).
-                if not best or #name > #best then best = name end
+            local key = id and POISON_ID_TO_KEY[id]
+            if key and name and (not typeKey or key == typeKey) then
+                if not bestName or id > (bestID or -1) then bestName, bestID = name, id end
             end
         end
     end
-    return best
+    return bestName
 end
 
--- Fallback poison detection: scan the weapon's tooltip for the temporary-enchant line
--- (used when GetWeaponEnchantInfo doesn't report poisons). Returns the line text or nil.
+-- Scan a weapon's tooltip for the temporary-enchant (poison) line, matched against the
+-- localized poison base names (the enchant API doesn't report poisons here). Returns text.
 local function WeaponEnchantText(slot)
     if C_TooltipInfo and C_TooltipInfo.GetInventoryItem then
         local data = C_TooltipInfo.GetInventoryItem("player", slot)
         if data and data.lines then
             for _, line in ipairs(data.lines) do
                 local t = line.leftText
-                if t and t:find(POISON_WORD) then return t end
+                if t then
+                    for _, d in ipairs(POISON_DEFS) do
+                        local bn = poisonName[d.key]
+                        if bn and t:find(bn, 1, true) then return t end
+                    end
+                end
             end
         end
     end
@@ -194,8 +247,8 @@ local function PoisonKey(b) return (b.slot == MAINHAND_SLOT) and "mh" or "oh" en
 local function ArmPoisonButton(b)
     if InCombatLockdown and InCombatLockdown() then return end
     RogueResourcesDB.poisonChoice = RogueResourcesDB.poisonChoice or {}
-    local choice = RogueResourcesDB.poisonChoice[PoisonKey(b)]
-    local poison = RogueResourcesDB.locked and FindBagPoison(choice) or nil
+    local choiceKey = RogueResourcesDB.poisonChoice[PoisonKey(b)]   -- stable key like "instant"
+    local poison = RogueResourcesDB.locked and FindBagPoison(choiceKey) or nil
     if poison then
         b:SetAttribute("type1", "macro")
         b:SetAttribute("macrotext", "/use " .. poison .. "\n/use " .. b.slot)
@@ -204,7 +257,8 @@ local function ArmPoisonButton(b)
     end
 end
 
--- Right-click a weapon button to choose which poison it applies. Saved per weapon.
+-- Right-click a weapon button to choose which poison it applies. Saved per weapon by a
+-- stable key; the menu shows the client's localized poison names.
 local function OpenPoisonMenu(b)
     RogueResourcesDB.poisonChoice = RogueResourcesDB.poisonChoice or {}
     local key = PoisonKey(b)
@@ -212,10 +266,10 @@ local function OpenPoisonMenu(b)
     if MenuUtil and MenuUtil.CreateContextMenu then
         MenuUtil.CreateContextMenu(b, function(_, root)
             root:CreateTitle(label)
-            for _, ptype in ipairs(POISON_TYPES) do
-                local mark = (RogueResourcesDB.poisonChoice[key] == ptype) and "|cff40ff40> |r" or ""
-                root:CreateButton(mark .. ptype, function()
-                    RogueResourcesDB.poisonChoice[key] = ptype
+            for _, d in ipairs(POISON_DEFS) do
+                local mark = (RogueResourcesDB.poisonChoice[key] == d.key) and "|cff40ff40> |r" or ""
+                root:CreateButton(mark .. (poisonName[d.key] or d.en), function()
+                    RogueResourcesDB.poisonChoice[key] = d.key
                     ArmPoisonButton(b)
                 end)
             end
@@ -227,11 +281,11 @@ local function OpenPoisonMenu(b)
         end)
     else   -- fallback: cycle through the types
         local cur, idx = RogueResourcesDB.poisonChoice[key], 0
-        for i, t in ipairs(POISON_TYPES) do if t == cur then idx = i break end end
-        local nextType = POISON_TYPES[(idx % #POISON_TYPES) + 1]
-        RogueResourcesDB.poisonChoice[key] = nextType
+        for i, d in ipairs(POISON_DEFS) do if d.key == cur then idx = i break end end
+        local nextDef = POISON_DEFS[(idx % #POISON_DEFS) + 1]
+        RogueResourcesDB.poisonChoice[key] = nextDef.key
         ArmPoisonButton(b)
-        print("|cff00ff88RogueResources:|r " .. label .. ": " .. nextType)
+        print("|cff00ff88RogueResources:|r " .. label .. ": " .. (poisonName[nextDef.key] or nextDef.en))
     end
 end
 
@@ -375,21 +429,29 @@ local function ReconcileOrder(f)
     RogueResourcesDB.iconOrder = clean
 end
 
--- Show only the icons whose ability is known, in the saved order, as one centered row
--- with no gaps. Re-run on spell changes (leveling) and after reordering.
+-- Show the known+enabled icons (or ALL, if RR.showAll is on for previewing), in the
+-- saved order, WRAPPED to the bar width: as many per row as fit under the energy bar,
+-- overflow flows to the next row. Each row is centered. Re-run on spell/order changes.
 local function LayoutIcons(f)
     for _, o in ipairs(f.icons) do o:Hide() end
     local visible = {}
     for _, key in ipairs(RogueResourcesDB.iconOrder) do
         local o = f.iconByKey[key]
-        if o and IconKnown(o) and IsEnabled(o) then o:Show(); visible[#visible + 1] = o end
+        if o and (RR.showAll or (IconKnown(o) and IsEnabled(o))) then
+            o:Show(); visible[#visible + 1] = o
+        end
     end
-    local n = #visible
-    local totalW = n * ICON_SIZE + math.max(0, n - 1) * ICON_GAP
-    local x0 = (BAR_W - totalW) / 2
+    local perRow = math.max(1, math.floor((BAR_W + ICON_GAP) / (ICON_SIZE + ICON_GAP)))
     for i, o in ipairs(visible) do
+        local row = math.floor((i - 1) / perRow)
+        local col = (i - 1) % perRow
+        local rowCount = math.min(perRow, #visible - row * perRow)   -- icons in this row
+        local rowW = rowCount * ICON_SIZE + (rowCount - 1) * ICON_GAP
+        local x0 = (BAR_W - rowW) / 2
         o:ClearAllPoints()
-        o:SetPoint("TOPLEFT", f, "BOTTOMLEFT", x0 + (i - 1) * (ICON_SIZE + ICON_GAP), -GAP)
+        o:SetPoint("TOPLEFT", f, "BOTTOMLEFT",
+            x0 + col * (ICON_SIZE + ICON_GAP),
+            -GAP - row * (ICON_SIZE + ICON_GAP))
     end
 end
 
@@ -895,6 +957,8 @@ ev:RegisterEvent("SPELLS_CHANGED")
 -- Weapon poison changes: applying/removing a poison and swapping weapons.
 ev:RegisterEvent("UNIT_INVENTORY_CHANGED")
 ev:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
+-- Localized poison names resolve from item ids as those items get cached.
+ev:RegisterEvent("GET_ITEM_INFO_RECEIVED")
 -- Belt-and-suspenders: persist the frame position on logout/reload too, so it never
 -- reverts even if an OnDragStop was somehow missed.
 ev:RegisterEvent("PLAYER_LOGOUT")
@@ -906,7 +970,8 @@ ev:SetScript("OnEvent", function(self, event, arg1, arg2, arg3)
         -- replace it with defaults and make the client skip loading the real saved
         -- data. By PLAYER_LOGIN the saved values are present.
         RogueResourcesDB = ApplyDefaults(RR.defaults, RogueResourcesDB)
-        RefreshSpellSets()   -- re-resolve names now that the spellbook is loaded
+        RefreshSpellSets()      -- re-resolve spell names now that the spellbook is loaded
+        RefreshPoisonNames()    -- re-resolve localized poison names
         frame = BuildUI()
         BuildPoisonFrame(frame)
         ApplyPosition(frame)
@@ -942,6 +1007,9 @@ ev:SetScript("OnEvent", function(self, event, arg1, arg2, arg3)
         PollCooldowns(frame)   -- catch any newly-known ability already on cooldown
     elseif event == "UNIT_INVENTORY_CHANGED" or event == "PLAYER_EQUIPMENT_CHANGED" then
         UpdatePoisons(frame)   -- poison applied/removed, or weapon swapped (icon + OH show)
+    elseif event == "GET_ITEM_INFO_RECEIVED" then
+        RefreshPoisonNames()   -- a poison item cached; localized names are now available
+        UpdatePoisons(frame)
     elseif event == "PLAYER_TARGET_CHANGED" then
         UpdateCP(frame)
         cpEstimate = 0   -- combo points are per-target on this build; reset the count
@@ -985,6 +1053,10 @@ SlashCmdList.ROGUERESOURCES = function(msg)
         SetLocked(frame, false)
     elseif msg == "options" or msg == "config" or msg == "" then
         ToggleOptions(frame)
+    elseif msg == "showall" then   -- temporary: preview every icon (resets on reload)
+        RR.showAll = not RR.showAll
+        LayoutIcons(frame)
+        print("|cff00ff88RogueResources:|r show-all preview " .. (RR.showAll and "ON" or "OFF") .. ".")
     elseif msg == "poison" or msg == "poisons" then
         if InCombatLockdown and InCombatLockdown() then
             print("|cff00ff88RogueResources:|r can't toggle poison icons in combat.")
