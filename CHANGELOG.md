@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.1.1
+
+- The ability icon row now wraps to the width of the bars: it fits as many
+  icons per row as possible under the energy bar and flows onto further rows,
+  instead of running off the sides when many abilities are shown.
+- Poison support is now language-independent. Poisons are identified by item ID
+  and their names read from your bags, so detection, the right-click poison
+  menu, and click-to-apply all work on non-English clients.
+- Click-to-apply now uses the highest rank of the chosen poison you're carrying,
+  and updates automatically as you get better ranks.
+
 ## 1.1.0
 
 - Added a weapon poison tracker: a separate, movable pair of icons showing your
