@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.2.0
+
+- Options now live in the built-in interface panel: **ESC → Options → AddOns →
+  Rogue Resources**. `/rr options` still opens the standalone movable window, and
+  both show the same controls and stay in sync.
+- Added a **UI scale** slider (50–200%) for the bars and poison icons (`/rr scale`).
+- The **Improved Slice and Dice** duration bonus is now detected automatically from
+  your talent rank, so the Slice and Dice timer is right without any setup. You can
+  still override it manually.
+- Added an **options button on the minimap** and an **Addon Compartment** entry to
+  open the panel (`/rr minimap` hides/shows the minimap button).
+- Moved the common toggles into the options panel: **Lock/Unlock**, **Reset
+  positions**, **Show poison icons**, and the Improved Slice and Dice selector.
+- The options UI is now **localized** (Portuguese, Spanish, French, German; English
+  elsewhere), and the Slice and Dice heading uses the game's own talent name.
+- The addon now only loads its UI for **Rogues**, so it stays out of the way on
+  other characters.
+
 ## 1.1.1
 
 - The ability icon row now wraps to the width of the bars: it fits as many

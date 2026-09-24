@@ -2,6 +2,109 @@
 local addonName, RR = ...   -- private namespace shared across the addon's files
 
 -- ---------------------------------------------------------------------------
+-- Localization of the addon's own UI text (labels, buttons, tooltips). Spell and
+-- poison names come localized from the game already; this table covers the strings
+-- WE write. `L` starts as the English defaults; a matching locale table overrides
+-- them, and any key with no translation just keeps the English text.
+--
+-- Note: the Improved Slice and Dice heading prefers the game's own localized talent
+-- name (read live in DetectSndRank), so `improvedSnD` here is only a fallback.
+-- ---------------------------------------------------------------------------
+local L = {
+    scale          = "Scale",
+    improvedSnD    = "Improved Slice and Dice",
+    auto           = "Auto",
+    manual         = "Manual",
+    autoNotFound   = "Auto (talent not found)",
+    autoFromTalent = "Auto (from talent)",
+    notFoundShort  = "not found",
+    none           = "None",
+    showPoison     = "Show poison icons",
+    showMinimap    = "Show minimap button",
+    lock           = "Lock",
+    unlock         = "Unlock",
+    resetPositions = "Reset positions",
+    abilityIcons   = "Ability icons",
+    reorderHint    = "drag to reorder  \226\128\162  checkbox to show/hide",
+    notLearned     = "(not learned)",
+    clickToOpen    = "Click to open options.",
+    mhPoison       = "Main-hand poison",
+    ohPoison       = "Off-hand poison",
+    anyPoison      = "Any (first found)",
+    panelDesc      = "Energy, combo points, Slice and Dice, cooldowns and weapon poisons. "
+        .. "Use |cffffd100/rr unlock|r to drag the bars and poison icons into place, "
+        .. "or |cffffd100/rr options|r for the standalone window.",
+}
+
+do
+    local T = {
+        ptBR = {
+            scale = "Escala", improvedSnD = "Instantâneo e Letal aprimorado",
+            manual = "Manual", autoNotFound = "Auto (talento não encontrado)",
+            autoFromTalent = "Auto (do talento)", notFoundShort = "não encontrado", none = "Nenhum",
+            showPoison = "Mostrar ícones de veneno", showMinimap = "Mostrar botão do minimapa",
+            lock = "Travar", unlock = "Destravar", resetPositions = "Redefinir posições",
+            abilityIcons = "Ícones de habilidades",
+            reorderHint = "arraste para reordenar  \226\128\162  caixa para mostrar/ocultar",
+            notLearned = "(não aprendida)", clickToOpen = "Clique para abrir as opções.",
+            mhPoison = "Veneno da mão principal", ohPoison = "Veneno da mão secundária",
+            anyPoison = "Qualquer (o primeiro)",
+            panelDesc = "Energia, pontos de combo, recargas e venenos de arma para Ladinos. "
+                .. "Use |cffffd100/rr unlock|r para posicionar as barras e os ícones de veneno, "
+                .. "ou |cffffd100/rr options|r para a janela independente.",
+        },
+        esES = {
+            scale = "Escala", improvedSnD = "Rebanar y trocear mejorado",
+            manual = "Manual", autoNotFound = "Auto (talento no encontrado)",
+            autoFromTalent = "Auto (del talento)", notFoundShort = "no encontrado", none = "Ninguno",
+            showPoison = "Mostrar iconos de veneno", showMinimap = "Mostrar botón del minimapa",
+            lock = "Bloquear", unlock = "Desbloquear", resetPositions = "Restablecer posiciones",
+            abilityIcons = "Iconos de habilidades",
+            reorderHint = "arrastra para reordenar  \226\128\162  casilla para mostrar/ocultar",
+            notLearned = "(no aprendida)", clickToOpen = "Clic para abrir las opciones.",
+            mhPoison = "Veneno de mano principal", ohPoison = "Veneno de mano secundaria",
+            anyPoison = "Cualquiera (el primero)",
+            panelDesc = "Energía, puntos de combo, reutilizaciones y venenos de arma para Pícaros. "
+                .. "Usa |cffffd100/rr unlock|r para colocar las barras y los iconos de veneno, "
+                .. "o |cffffd100/rr options|r para la ventana independiente.",
+        },
+        frFR = {
+            scale = "Échelle", improvedSnD = "Trancher et lacérer amélioré",
+            manual = "Manuel", autoNotFound = "Auto (talent introuvable)",
+            autoFromTalent = "Auto (du talent)", notFoundShort = "introuvable", none = "Aucun",
+            showPoison = "Afficher les icônes de poison", showMinimap = "Afficher le bouton de la mini-carte",
+            lock = "Verrouiller", unlock = "Déverrouiller", resetPositions = "Réinitialiser les positions",
+            abilityIcons = "Icônes de capacités",
+            reorderHint = "glisser pour réorganiser  \226\128\162  case pour afficher/masquer",
+            notLearned = "(non apprise)", clickToOpen = "Cliquez pour ouvrir les options.",
+            mhPoison = "Poison de la main directrice", ohPoison = "Poison de la main secondaire",
+            anyPoison = "N'importe lequel (le premier)",
+            panelDesc = "Énergie, points de combo, temps de recharge et poisons d'arme pour les Voleurs. "
+                .. "Utilisez |cffffd100/rr unlock|r pour placer les barres et les icônes de poison, "
+                .. "ou |cffffd100/rr options|r pour la fenêtre indépendante.",
+        },
+        deDE = {
+            scale = "Skalierung", improvedSnD = "Verbessertes Schlitzen",
+            manual = "Manuell", autoNotFound = "Auto (Talent nicht gefunden)",
+            autoFromTalent = "Auto (aus Talent)", notFoundShort = "nicht gefunden", none = "Keine",
+            showPoison = "Giftsymbole anzeigen", showMinimap = "Minikarten-Knopf anzeigen",
+            lock = "Sperren", unlock = "Entsperren", resetPositions = "Positionen zurücksetzen",
+            abilityIcons = "Fähigkeitensymbole",
+            reorderHint = "Ziehen zum Sortieren  \226\128\162  Kästchen zum Ein-/Ausblenden",
+            notLearned = "(nicht erlernt)", clickToOpen = "Klicken, um die Optionen zu öffnen.",
+            mhPoison = "Gift für die Waffenhand", ohPoison = "Gift für die Schildhand",
+            anyPoison = "Beliebig (erstes gefundenes)",
+            panelDesc = "Energie, Kombopunkte, Abklingzeiten und Waffengifte für Schurken. "
+                .. "Mit |cffffd100/rr unlock|r die Leisten und Giftsymbole platzieren, "
+                .. "oder |cffffd100/rr options|r für das eigenständige Fenster.",
+        },
+    }
+    T.esMX = T.esES
+    local loc = (GetLocale and GetLocale()) or "enUS"
+    if T[loc] then for k, v in pairs(T[loc]) do L[k] = v end end
+end
+
+-- ---------------------------------------------------------------------------
 -- Resource reads, tolerant of the client's API surface.
 --
 -- This is an Anniversary client running on the modern ("retail") engine, so it
@@ -262,7 +365,7 @@ end
 local function OpenPoisonMenu(b)
     RogueResourcesDB.poisonChoice = RogueResourcesDB.poisonChoice or {}
     local key = PoisonKey(b)
-    local label = (key == "mh") and "Main-hand poison" or "Off-hand poison"
+    local label = (key == "mh") and L.mhPoison or L.ohPoison
     if MenuUtil and MenuUtil.CreateContextMenu then
         MenuUtil.CreateContextMenu(b, function(_, root)
             root:CreateTitle(label)
@@ -274,7 +377,7 @@ local function OpenPoisonMenu(b)
                 end)
             end
             root:CreateDivider()
-            root:CreateButton("Any (first found)", function()
+            root:CreateButton(L.anyPoison, function()
                 RogueResourcesDB.poisonChoice[key] = nil
                 ArmPoisonButton(b)
             end)
@@ -297,7 +400,11 @@ RR.defaults = {
     locked      = true,
     position    = { point = "CENTER", relativePoint = "CENTER", x = 0, y = -179 },
     poisonPos   = { point = "CENTER", relativePoint = "CENTER", x = 144, y = -179 },
-    sndMult     = 1.0,  -- Improved Slice and Dice talent multiplier (1.0/1.15/1.30/1.45)
+    sndAuto     = true, -- auto-detect the Improved Slice and Dice talent rank (see below)
+    sndMult     = 1.0,  -- manual Improved SnD multiplier, used only when sndAuto = false
+    scale       = 1.0,  -- UI scale for the bars + poison frame (0.5 .. 2.0)
+    minimapHidden = false, -- hide the minimap button
+    minimapAngle  = 200,   -- minimap button position, degrees around the ring
 }
 
 -- Fill only MISSING keys from defaults (recursively), so a saved position/duration is
@@ -456,10 +563,93 @@ local function LayoutIcons(f)
 end
 
 -- ---------------------------------------------------------------------------
--- Options panel: drag rows to reorder the icon row. Built lazily.
+-- Options: a canvas panel registered under Options -> AddOns (the built-in
+-- Settings UI). Holds a UI-scale slider and the drag-to-reorder / show-hide
+-- ability list. Built once at login so it always appears in the AddOns list.
 -- ---------------------------------------------------------------------------
-local OPT_W, ROW_TOP, ROW_H = 320, 36, 30
-local RefreshOptions   -- forward declaration (drag stop calls it)
+local OPT_W, ROW_H = 340, 30
+local SCALE_MIN, SCALE_MAX, SCALE_STEP = 0.5, 2.0, 0.05
+
+-- Improved Slice and Dice: each talent rank adds 15% duration (max 45% at rank 3). The
+-- manual override list mirrors those ranks; auto-detect reads the rank straight off the
+-- talent (see DetectSndRank) so most players never need to touch this.
+local SND_MULT_PER_RANK = 0.15
+local SND_MULTS = {
+    { v = 1.00, r = "None" },
+    { v = 1.15, r = "1/3" },
+    { v = 1.30, r = "2/3" },
+    { v = 1.45, r = "3/3" },
+}
+local function MultText(v) return string.format("x%.2f", v or 1) end
+-- Menu label for a rank entry, e.g. "None (x1.00)" / "2/3 (x1.30)" ("None" localized).
+local function MultLabel(o) return (o.r == "None" and L.none or o.r) .. string.format(" (x%.2f)", o.v) end
+
+-- Read the Improved Slice and Dice talent rank without hardcoding tree coordinates or
+-- per-rank spell IDs (this client may use a revised tree). We scan the talent tables and
+-- identify the talent locale-independently: it shares the Slice and Dice ability icon, and
+-- its name contains the ability name. Everything is pcall-guarded so an unexpected talent
+-- API surface just yields nil (falling back to the manual multiplier). Returns rank or nil.
+local function DetectSndRank()
+    if type(GetNumTalentTabs) ~= "function" or type(GetTalentInfo) ~= "function" then return nil end
+    local sndName = SpellName(5171)
+    local sndTex  = SpellTex(5171)
+    local numTabs = GetNumTalentTabs() or 0
+    for tab = 1, numTabs do
+        local numT = (type(GetNumTalents) == "function" and GetNumTalents(tab)) or 0
+        for i = 1, numT do
+            local ok, name, icon, _, _, rank = pcall(GetTalentInfo, tab, i)
+            if ok and name then
+                local iconStr = (type(icon) == "string") and icon:lower() or nil
+                local match =
+                    (sndName and name ~= sndName and name:find(sndName, 1, true) ~= nil) or
+                    (iconStr and iconStr:find("slicedice", 1, true) ~= nil) or
+                    (type(icon) == "number" and sndTex and icon == sndTex)
+                if match then return rank or 0, name end
+            end
+        end
+    end
+    return nil
+end
+
+-- Cache the auto-detected multiplier + the game's own localized talent name on RR
+-- (recomputed at login and on talent changes).
+local function UpdateAutoSndMult()
+    local rank, name = DetectSndRank()
+    RR.autoSndMult = rank and (1 + SND_MULT_PER_RANK * rank) or nil
+    RR.autoSndName = name
+end
+
+-- Heading for the Improved Slice and Dice control: prefer the game's own localized
+-- talent name (when detected), else our translated fallback.
+local function SndHeading()
+    return RR.autoSndName or L.improvedSnD
+end
+
+-- The multiplier actually applied to a Slice and Dice cast: the auto-detected value when
+-- auto mode is on and detection succeeded, otherwise the manual choice.
+local function EffectiveSndMult()
+    if RogueResourcesDB.sndAuto and RR.autoSndMult then return RR.autoSndMult end
+    return RogueResourcesDB.sndMult or 1
+end
+
+-- Options button caption: reflects auto vs manual and what was detected.
+local function SndButtonText()
+    if RogueResourcesDB.sndAuto then
+        return RR.autoSndMult and (L.auto .. ": " .. MultText(RR.autoSndMult)) or L.autoNotFound
+    end
+    return L.manual .. ": " .. MultText(RogueResourcesDB.sndMult)
+end
+
+-- Forward declarations: these are defined later in the file but referenced by the
+-- options controls above them (the Lock/Reset buttons and the drag-reorder callbacks).
+local RefreshOptions, SetLocked, ApplyPosition, ApplyPoisonPosition
+
+-- Apply the saved UI scale to the bars and the (separate) poison frame together.
+local function ApplyScale(f)
+    local s = RogueResourcesDB.scale or 1.0
+    f:SetScale(s)
+    if f.poisonFrame then f.poisonFrame:SetScale(s) end
+end
 
 -- Move the ability at slot `from` to slot `to` in the saved order, then re-lay-out.
 local function MoveIconTo(f, from, to)
@@ -474,16 +664,291 @@ local function MoveIconTo(f, from, to)
     RefreshOptions(f)
 end
 
+-- Reset the bars and poison frame to their default positions (fresh copies so the saved
+-- tables never alias RR.defaults), then re-anchor both.
+local function ResetPositions(f)
+    local dp, dpp = RR.defaults.position, RR.defaults.poisonPos
+    RogueResourcesDB.position  = { point = dp.point,  relativePoint = dp.relativePoint,  x = dp.x,  y = dp.y }
+    RogueResourcesDB.poisonPos = { point = dpp.point, relativePoint = dpp.relativePoint, x = dpp.x, y = dpp.y }
+    ApplyPosition(f)
+    ApplyPoisonPosition(f)
+    print("|cff00ff88RogueResources:|r positions reset to default.")
+end
+
+-- Choose the Improved Slice and Dice multiplier from the options button (context menu,
+-- with a cycle fallback on API surfaces that lack MenuUtil).
+local function OpenSndMenu(f, anchor)
+    if MenuUtil and MenuUtil.CreateContextMenu then
+        MenuUtil.CreateContextMenu(anchor, function(_, root)
+            root:CreateTitle(SndHeading())
+            local autoLabel = L.autoFromTalent ..
+                (RR.autoSndMult and (" — " .. MultText(RR.autoSndMult)) or (" — " .. L.notFoundShort))
+            root:CreateButton((RogueResourcesDB.sndAuto and "|cff40ff40> |r" or "") .. autoLabel, function()
+                RogueResourcesDB.sndAuto = true
+                UpdateAutoSndMult()
+                RefreshOptions(f)
+            end)
+            root:CreateDivider()
+            for _, o in ipairs(SND_MULTS) do
+                local on = (not RogueResourcesDB.sndAuto) and math.abs((RogueResourcesDB.sndMult or 1) - o.v) < 1e-3
+                root:CreateButton((on and "|cff40ff40> |r" or "") .. MultLabel(o), function()
+                    RogueResourcesDB.sndAuto = false
+                    RogueResourcesDB.sndMult = o.v
+                    RefreshOptions(f)
+                end)
+            end
+        end)
+    else
+        -- No menu API: cycle Auto -> None -> 1/3 -> 2/3 -> 3/3 -> Auto.
+        if RogueResourcesDB.sndAuto then
+            RogueResourcesDB.sndAuto = false
+            RogueResourcesDB.sndMult = SND_MULTS[1].v
+        else
+            local cur, idx = RogueResourcesDB.sndMult or 1, 1
+            for i, o in ipairs(SND_MULTS) do if math.abs(o.v - cur) < 1e-3 then idx = i break end end
+            if idx >= #SND_MULTS then
+                RogueResourcesDB.sndAuto = true
+            else
+                RogueResourcesDB.sndMult = SND_MULTS[idx + 1].v
+            end
+        end
+        RefreshOptions(f)
+    end
+end
+
+-- Show/hide poison icons from the options checkbox. Toggling visibility of a frame that
+-- parents secure buttons is blocked in combat, so guard and revert the check if locked.
+local function TogglePoisonFromOptions(f, check)
+    if InCombatLockdown and InCombatLockdown() then
+        print("|cff00ff88RogueResources:|r can't toggle poison icons in combat.")
+        check:SetChecked(not RogueResourcesDB.poisonHidden)   -- revert to the real state
+        return
+    end
+    RogueResourcesDB.poisonHidden = not check:GetChecked()
+    if f.poisonFrame then f.poisonFrame:SetShown(not RogueResourcesDB.poisonHidden) end
+end
+
+-- One reorder/show-hide row, parented to a view's list container. Dragging a row
+-- reorders the icons; the checkbox toggles it on/off. Anchor math is relative to the
+-- list so it works wherever the view lives (floating window OR the Settings page).
+local function MakeOptionRow(f, view, i)
+    local list = view.list
+    local row = CreateFrame("Frame", nil, list)
+    row:SetSize(OPT_W, ROW_H - 4)
+    row:SetPoint("TOPLEFT", 0, -(i - 1) * ROW_H)
+    row.slotIndex = i
+    row:EnableMouse(true)
+    row:RegisterForDrag("LeftButton")
+
+    local hl = row:CreateTexture(nil, "BACKGROUND")
+    hl:SetAllPoints(row); hl:SetColorTexture(1, 1, 1, 0.10); hl:Hide()
+
+    local grip = row:CreateFontString(nil, "OVERLAY", "GameFontDisableLarge")
+    grip:SetPoint("LEFT", 3, 0); grip:SetText("=")
+
+    local icon = row:CreateTexture(nil, "ARTWORK")
+    icon:SetSize(22, 22); icon:SetPoint("LEFT", 22, 0)
+    icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+
+    -- Show/hide toggle. Checked = show on the bar (when learned).
+    local check = CreateFrame("CheckButton", nil, row, "UICheckButtonTemplate")
+    check:SetSize(24, 24)
+    check:SetPoint("RIGHT", row, "RIGHT", -4, 0)
+    check:SetScript("OnClick", function(self)
+        if row.key then
+            RogueResourcesDB.iconEnabled[row.key] = self:GetChecked() and true or false
+            LayoutIcons(f)
+            RefreshOptions(f)   -- keep the other view's checkbox in sync
+        end
+    end)
+
+    local label = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    label:SetPoint("LEFT", icon, "RIGHT", 8, 0)
+    label:SetPoint("RIGHT", check, "LEFT", -6, 0)
+    label:SetJustifyH("LEFT")
+
+    row:SetScript("OnEnter", function() hl:Show() end)
+    row:SetScript("OnLeave", function() if not row.dragging then hl:Hide() end end)
+    row:SetScript("OnDragStart", function(self)
+        self.dragging = true
+        hl:Show()
+        self:SetFrameLevel(list:GetFrameLevel() + 20)
+        self:SetScript("OnUpdate", function(self)
+            local s = list:GetEffectiveScale()
+            local _, cy = GetCursorPosition()
+            self:ClearAllPoints()
+            self:SetPoint("TOP", UIParent, "BOTTOMLEFT", list:GetLeft() + OPT_W / 2, cy / s + 10)
+        end)
+    end)
+    row:SetScript("OnDragStop", function(self)
+        self:SetScript("OnUpdate", nil)
+        self.dragging = false
+        hl:Hide()
+        local s = list:GetEffectiveScale()
+        local _, cy = GetCursorPosition()
+        local offsetFromTop = list:GetTop() - (cy / s)
+        local target = math.floor(offsetFromTop / ROW_H + 0.5) + 1
+        MoveIconTo(f, self.slotIndex, target)
+    end)
+
+    row.hl, row.icon, row.label, row.check = hl, icon, label, check
+    return row
+end
+
+-- Build the shared options body (scale slider + reorder/show-hide list) into `body`.
+-- Registers a "view" so RefreshOptions can keep every open copy (the floating window
+-- AND the Settings page) in sync. Returns the body height.
+local function PopulateOptions(f, body)
+    local view = {}
+    local y = -4   -- vertical cursor (from body top); advanced as each control is placed
+
+    -- Scale slider.
+    local scaleLabel = body:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+    scaleLabel:SetPoint("TOPLEFT", 0, y); scaleLabel:SetText(L.scale)
+    y = y - 20
+
+    local slider = CreateFrame("Slider", nil, body, "OptionsSliderTemplate")
+    slider:SetPoint("TOPLEFT", 6, y)
+    slider:SetWidth(240)
+    slider:SetMinMaxValues(SCALE_MIN, SCALE_MAX)
+    slider:SetValueStep(SCALE_STEP)
+    slider:SetObeyStepOnDrag(true)
+    if slider.Low  then slider.Low:SetText(math.floor(SCALE_MIN * 100) .. "%") end
+    if slider.High then slider.High:SetText(math.floor(SCALE_MAX * 100) .. "%") end
+    if slider.Text then slider.Text:SetText("") end
+    local scaleVal = body:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    scaleVal:SetPoint("LEFT", slider, "RIGHT", 12, 0)
+    slider:SetScript("OnValueChanged", function(_, value)
+        if f._syncing then return end               -- ignore programmatic sync SetValue
+        value = math.floor(value / SCALE_STEP + 0.5) * SCALE_STEP
+        RogueResourcesDB.scale = value
+        ApplyScale(f)
+        RefreshOptions(f)                            -- update value text + the other view
+    end)
+    view.slider, view.scaleVal = slider, scaleVal
+    y = y - 40
+
+    -- Improved Slice and Dice multiplier (opens a menu of the four talent ranks). The
+    -- heading uses the game's own localized talent name when detected (see RefreshOptions).
+    local sndLabel = body:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+    sndLabel:SetPoint("TOPLEFT", 0, y); sndLabel:SetText(SndHeading())
+    view.sndLabel = sndLabel
+    y = y - 20
+    local sndBtn = CreateFrame("Button", nil, body, "UIPanelButtonTemplate")
+    sndBtn:SetPoint("TOPLEFT", 0, y); sndBtn:SetSize(190, 22)
+    sndBtn:SetScript("OnClick", function(self) OpenSndMenu(f, self) end)
+    view.sndBtn = sndBtn
+    y = y - 34
+
+    -- Show poison icons.
+    local poisonCheck = CreateFrame("CheckButton", nil, body, "UICheckButtonTemplate")
+    poisonCheck:SetPoint("TOPLEFT", -2, y); poisonCheck:SetSize(26, 26)
+    local pcl = poisonCheck:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    pcl:SetPoint("LEFT", poisonCheck, "RIGHT", 2, 0); pcl:SetText(L.showPoison)
+    poisonCheck:SetScript("OnClick", function(self) TogglePoisonFromOptions(f, self) end)
+    view.poisonCheck = poisonCheck
+    y = y - 30
+
+    -- Show minimap button.
+    local mmCheck = CreateFrame("CheckButton", nil, body, "UICheckButtonTemplate")
+    mmCheck:SetPoint("TOPLEFT", -2, y); mmCheck:SetSize(26, 26)
+    local mml = mmCheck:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    mml:SetPoint("LEFT", mmCheck, "RIGHT", 2, 0); mml:SetText(L.showMinimap)
+    mmCheck:SetScript("OnClick", function(self)
+        RogueResourcesDB.minimapHidden = not self:GetChecked()
+        if f.minimapButton then f.minimapButton:SetShown(not RogueResourcesDB.minimapHidden) end
+    end)
+    view.minimapCheck = mmCheck
+    y = y - 30
+
+    -- Lock / Reset positions.
+    local lockBtn = CreateFrame("Button", nil, body, "UIPanelButtonTemplate")
+    lockBtn:SetPoint("TOPLEFT", 2, y); lockBtn:SetSize(110, 22)
+    lockBtn:SetScript("OnClick", function()
+        SetLocked(f, not RogueResourcesDB.locked)
+        RefreshOptions(f)
+    end)
+    view.lockBtn = lockBtn
+    local resetBtn = CreateFrame("Button", nil, body, "UIPanelButtonTemplate")
+    resetBtn:SetPoint("LEFT", lockBtn, "RIGHT", 8, 0); resetBtn:SetSize(130, 22)
+    resetBtn:SetText(L.resetPositions)
+    resetBtn:SetScript("OnClick", function() ResetPositions(f) end)
+    y = y - 36
+
+    -- Ability icon list (drag to reorder, checkbox to show/hide).
+    local listHead = body:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+    listHead:SetPoint("TOPLEFT", 0, y); listHead:SetText(L.abilityIcons)
+    local listHint = body:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+    listHint:SetPoint("LEFT", listHead, "RIGHT", 8, 0)
+    listHint:SetText(L.reorderHint)
+    y = y - 20
+
+    local list = CreateFrame("Frame", nil, body)
+    list:SetPoint("TOPLEFT", 0, y)
+    list:SetSize(OPT_W, #f.icons * ROW_H)
+    view.list = list
+    view.rows = {}
+    for i = 1, #f.icons do view.rows[i] = MakeOptionRow(f, view, i) end
+    y = y - #f.icons * ROW_H
+
+    f.optionViews = f.optionViews or {}
+    f.optionViews[#f.optionViews + 1] = view
+
+    local bodyH = -y + 8
+    body:SetSize(OPT_W, bodyH)
+    return bodyH, view
+end
+
+-- The embedded copy under Options -> AddOns (built at login so it always appears).
+local function BuildSettingsPanel(f)
+    if f.settingsPanel then return f.settingsPanel end
+    local panel = CreateFrame("Frame", nil, UIParent)
+    panel.name = "Rogue Resources"
+
+    local title = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
+    title:SetPoint("TOPLEFT", 16, -16)
+    title:SetText("Rogue Resources")
+
+    local sub = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    sub:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -6)
+    sub:SetPoint("RIGHT", panel, "RIGHT", -24, 0)
+    sub:SetJustifyH("LEFT")
+    sub:SetText(L.panelDesc)
+
+    local body = CreateFrame("Frame", nil, panel)
+    body:SetPoint("TOPLEFT", sub, "BOTTOMLEFT", 0, -22)
+    PopulateOptions(f, body)
+
+    -- Refresh the rows/slider each time the page is shown (Blizzard opens it, not us).
+    panel:SetScript("OnShow", function() RefreshOptions(f) end)
+
+    -- Register under Options -> AddOns. Prefer the modern Settings API; fall back to the
+    -- legacy InterfaceOptions registration on older API surfaces.
+    if Settings and Settings.RegisterCanvasLayoutCategory and Settings.RegisterAddOnCategory then
+        local category = Settings.RegisterCanvasLayoutCategory(panel, "Rogue Resources")
+        Settings.RegisterAddOnCategory(category)
+        RR.settingsCategory = category
+    elseif InterfaceOptions_AddCategory then
+        InterfaceOptions_AddCategory(panel)
+    end
+
+    f.settingsPanel = panel
+    RefreshOptions(f)   -- populate the just-built rows
+    return panel
+end
+
+-- The standalone, draggable options window that /rr options opens. Shows the same
+-- controls as the Settings -> AddOns page (both are kept in sync via RefreshOptions).
 local function BuildOptions(f)
-    if f.options then return f.options end
+    if f.optWindow then return f.optWindow end
     local opt = CreateFrame("Frame", nil, UIParent)
-    opt:SetSize(OPT_W, ROW_TOP + #f.icons * ROW_H + 8)
-    opt:SetPoint("CENTER")
     opt:SetFrameStrata("DIALOG")
     opt:SetMovable(true); opt:EnableMouse(true)
+    opt:SetClampedToScreen(true)
     opt:RegisterForDrag("LeftButton")
     opt:SetScript("OnDragStart", function(self) self:StartMoving() end)
     opt:SetScript("OnDragStop", function(self) self:StopMovingOrSizing() end)
+    opt:SetPoint("CENTER")
 
     local edge = opt:CreateTexture(nil, "BACKGROUND", nil, -1)
     edge:SetPoint("TOPLEFT", -1, 1); edge:SetPoint("BOTTOMRIGHT", 1, -1)
@@ -493,102 +958,135 @@ local function BuildOptions(f)
 
     local title = opt:CreateFontString(nil, "OVERLAY")
     title:SetFont("Fonts\\FRIZQT__.TTF", 13, "OUTLINE")
-    title:SetPoint("TOPLEFT", 12, -11)
-    title:SetText("Rogue Resources — reorder & show/hide")
+    title:SetPoint("TOPLEFT", 14, -12)
+    title:SetText("Rogue Resources")
 
     local close = CreateFrame("Button", nil, opt, "UIPanelCloseButton")
     close:SetPoint("TOPRIGHT", 2, 2)
 
-    opt.rows = {}
-    for i = 1, #f.icons do
-        local row = CreateFrame("Frame", nil, opt)
-        row:SetSize(OPT_W - 24, ROW_H - 4)
-        row.slotIndex = i
-        row:EnableMouse(true)
-        row:RegisterForDrag("LeftButton")
+    local body = CreateFrame("Frame", nil, opt)
+    body:SetPoint("TOPLEFT", 16, -40)
+    local bodyH = PopulateOptions(f, body)
+    opt:SetSize(OPT_W + 32, bodyH + 52)
 
-        local hl = row:CreateTexture(nil, "BACKGROUND")
-        hl:SetAllPoints(row); hl:SetColorTexture(1, 1, 1, 0.10); hl:Hide()
-
-        local grip = row:CreateFontString(nil, "OVERLAY", "GameFontDisableLarge")
-        grip:SetPoint("LEFT", 3, 0); grip:SetText("=")
-
-        local icon = row:CreateTexture(nil, "ARTWORK")
-        icon:SetSize(22, 22); icon:SetPoint("LEFT", 20, 0)
-        icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-
-        -- Show/hide toggle. Checked = show on the bar (when learned).
-        local check = CreateFrame("CheckButton", nil, row, "UICheckButtonTemplate")
-        check:SetSize(22, 22)
-        check:SetPoint("RIGHT", row, "RIGHT", 0, 0)
-        check:SetScript("OnClick", function(self)
-            if row.key then
-                RogueResourcesDB.iconEnabled[row.key] = self:GetChecked() and true or false
-                LayoutIcons(f)
-            end
-        end)
-
-        local label = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-        label:SetPoint("LEFT", icon, "RIGHT", 8, 0)
-        label:SetPoint("RIGHT", check, "LEFT", -4, 0)
-        label:SetJustifyH("LEFT")
-
-        row:SetScript("OnEnter", function() hl:Show() end)
-        row:SetScript("OnLeave", function() if not row.dragging then hl:Hide() end end)
-        row:SetScript("OnDragStart", function(self)
-            self.dragging = true
-            hl:Show()
-            self:SetFrameLevel(opt:GetFrameLevel() + 10)
-            self:SetScript("OnUpdate", function(self)
-                local s = opt:GetEffectiveScale()
-                local _, cy = GetCursorPosition()
-                self:ClearAllPoints()
-                self:SetPoint("TOP", UIParent, "BOTTOMLEFT",
-                    opt:GetLeft() + 12 + (OPT_W - 24) / 2, cy / s + 10)
-            end)
-        end)
-        row:SetScript("OnDragStop", function(self)
-            self:SetScript("OnUpdate", nil)
-            self.dragging = false
-            hl:Hide()
-            local s = opt:GetEffectiveScale()
-            local _, cy = GetCursorPosition()
-            local offsetFromTop = opt:GetTop() - (cy / s)
-            local target = math.floor((offsetFromTop - ROW_TOP) / ROW_H + 0.5) + 1
-            MoveIconTo(f, self.slotIndex, target)
-        end)
-
-        row.hl, row.icon, row.label, row.check = hl, icon, label, check
-        opt.rows[i] = row
-    end
-
-    f.options = opt
+    opt:SetScript("OnShow", function() RefreshOptions(f) end)
+    opt:Hide()   -- new frames start shown; hide so the first /rr options opens it
+    f.optWindow = opt
     return opt
 end
 
+-- Refresh EVERY built options view (floating window + Settings page) from saved state:
+-- the scale slider/value and the reorder rows. `f._syncing` guards the slider so the
+-- programmatic SetValue below doesn't re-fire OnValueChanged.
 function RefreshOptions(f)
-    if not f.options then return end
+    if not f.optionViews then return end
+    local s = RogueResourcesDB.scale or 1.0
     local order = RogueResourcesDB.iconOrder
-    for i, row in ipairs(f.options.rows) do
-        row:ClearAllPoints()   -- reset from any drag; snap back to this slot
-        row:SetPoint("TOPLEFT", 12, -ROW_TOP - (i - 1) * ROW_H)
-        row:SetFrameLevel(f.options:GetFrameLevel() + 1)
-        local o = order[i] and f.iconByKey[order[i]]
-        row.key = o and o.key or nil
-        if o then
-            row:Show()
-            row.icon:SetTexture(o.icon:GetTexture())
-            row.label:SetText(o.label .. (IconKnown(o) and "" or "  |cff808080(not learned)|r"))
-            row.check:SetChecked(IsEnabled(o))
-        else
-            row:Hide()
+    f._syncing = true
+    for _, view in ipairs(f.optionViews) do
+        -- Only push a value that actually differs, so we don't fight the thumb of the
+        -- slider currently being dragged (its value already equals s after snapping).
+        if view.slider and math.abs((view.slider:GetValue() or 0) - s) > 1e-4 then
+            view.slider:SetValue(s)
+        end
+        if view.scaleVal then view.scaleVal:SetText(math.floor(s * 100 + 0.5) .. "%") end
+        if view.sndLabel then view.sndLabel:SetText(SndHeading()) end
+        if view.sndBtn then view.sndBtn:SetText(SndButtonText()) end
+        if view.lockBtn then view.lockBtn:SetText(RogueResourcesDB.locked and L.unlock or L.lock) end
+        if view.poisonCheck then view.poisonCheck:SetChecked(not RogueResourcesDB.poisonHidden) end
+        if view.minimapCheck then view.minimapCheck:SetChecked(not RogueResourcesDB.minimapHidden) end
+        for i, row in ipairs(view.rows) do
+            row:ClearAllPoints()   -- reset from any drag; snap back to this slot
+            row:SetPoint("TOPLEFT", 0, -(i - 1) * ROW_H)
+            local o = order[i] and f.iconByKey[order[i]]
+            row.key = o and o.key or nil
+            if o then
+                row:Show()
+                row.icon:SetTexture(o.icon:GetTexture())
+                row.label:SetText(o.label .. (IconKnown(o) and "" or ("  |cff808080" .. L.notLearned .. "|r")))
+                row.check:SetChecked(IsEnabled(o))
+            else
+                row:Hide()
+            end
         end
     end
+    f._syncing = false
 end
 
+-- /rr options: toggle the standalone floating window.
 local function ToggleOptions(f)
     local opt = BuildOptions(f)
     if opt:IsShown() then opt:Hide() else RefreshOptions(f); opt:Show() end
+end
+
+-- A draggable minimap button (parented to the Minimap, positioned by angle on the ring)
+-- that opens the options window. Uses the Slice and Dice icon. Position is saved.
+local function BuildMinimapButton(f)
+    if f.minimapButton or not Minimap then return f and f.minimapButton end
+    local b = CreateFrame("Button", "RogueResourcesMinimapButton", Minimap)
+    b:SetSize(31, 31); b:SetFrameStrata("MEDIUM"); b:SetFrameLevel(8)
+    b:RegisterForClicks("AnyUp")
+    b:RegisterForDrag("LeftButton")
+
+    -- Standard LibDBIcon-style layout: a small icon inset inside the tracking-border ring,
+    -- so the button reads as a round minimap button rather than a bare square.
+    local bg = b:CreateTexture(nil, "BACKGROUND")
+    bg:SetSize(20, 20); bg:SetPoint("TOPLEFT", 7, -5)
+    bg:SetTexture("Interface\\Minimap\\UI-Minimap-Background")
+    local icon = b:CreateTexture(nil, "ARTWORK")
+    icon:SetSize(17, 17); icon:SetPoint("TOPLEFT", 7, -6)
+    icon:SetTexture(SpellTex(5171) or SND_FALLBACK_ICON)
+    icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    local border = b:CreateTexture(nil, "OVERLAY")
+    border:SetSize(53, 53); border:SetPoint("TOPLEFT")
+    border:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
+
+    -- Sit on the minimap ring: radius from the minimap's own size (works whatever its
+    -- scale/shape), not a hardcoded value that overlaps a larger minimap.
+    local function place()
+        local a = math.rad(RogueResourcesDB.minimapAngle or 200)
+        local r = (Minimap:GetWidth() / 2) + 5
+        b:SetPoint("CENTER", Minimap, "CENTER", math.cos(a) * r, math.sin(a) * r)
+    end
+    place()
+
+    b:SetScript("OnDragStart", function(self)
+        self:SetScript("OnUpdate", function()
+            local mx, my = Minimap:GetCenter()
+            local cx, cy = GetCursorPosition()
+            local sc = Minimap:GetEffectiveScale()
+            RogueResourcesDB.minimapAngle = math.deg(math.atan2(cy / sc - my, cx / sc - mx))
+            place()
+        end)
+    end)
+    b:SetScript("OnDragStop", function(self) self:SetScript("OnUpdate", nil) end)
+    b:SetScript("OnClick", function() ToggleOptions(f) end)
+    b:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+        GameTooltip:AddLine("Rogue Resources")
+        GameTooltip:AddLine(L.clickToOpen, 1, 1, 1)
+        GameTooltip:Show()
+    end)
+    b:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+    b:SetShown(not RogueResourcesDB.minimapHidden)
+    f.minimapButton = b
+    return b
+end
+
+-- Register with the Addon Compartment (the button list on the minimap) if the client
+-- supports it. Clicking the entry opens the options window. Registered once.
+local function RegisterAddonCompartment(f)
+    if RR.compartmentRegistered then return end
+    if not (AddonCompartmentFrame and AddonCompartmentFrame.RegisterAddon) then return end
+    AddonCompartmentFrame:RegisterAddon({
+        text = "Rogue Resources",
+        icon = SpellTex(5171) or SND_FALLBACK_ICON,
+        notCheckable = true,
+        registerForAnyClick = true,
+        func = function() ToggleOptions(f) end,
+    })
+    RR.compartmentRegistered = true
 end
 
 local function BuildUI()
@@ -771,7 +1269,7 @@ local function BuildPoisonFrame(f)
     return pf
 end
 
-local function ApplyPoisonPosition(f)
+function ApplyPoisonPosition(f)   -- forward-declared above (options reset button uses it)
     local pos = RogueResourcesDB.poisonPos or RR.defaults.poisonPos
     f.poisonFrame:ClearAllPoints()
     f.poisonFrame:SetPoint(pos.point or "CENTER", UIParent, pos.relativePoint or "CENTER", pos.x or 0, pos.y or 0)
@@ -916,13 +1414,13 @@ local function StopSnD(f)
     if f.snd.cd.Clear then f.snd.cd:Clear() end
 end
 
-local function ApplyPosition(f)
+function ApplyPosition(f)   -- forward-declared above (options reset button uses it)
     local pos = RogueResourcesDB.position or RR.defaults.position
     f:ClearAllPoints()
     f:SetPoint(pos.point or "CENTER", UIParent, pos.relativePoint or "CENTER", pos.x or 0, pos.y or 0)
 end
 
-local function SetLocked(f, locked)
+function SetLocked(f, locked)   -- forward-declared above (options Lock button uses it)
     RogueResourcesDB.locked = locked
     f:EnableMouse(not locked)
     if locked then
@@ -965,6 +1463,13 @@ ev:RegisterEvent("PLAYER_LOGOUT")
 
 ev:SetScript("OnEvent", function(self, event, arg1, arg2, arg3)
     if event == "PLAYER_LOGIN" then
+        -- Rogue-only: this addon tracks rogue resources, so on any other class we build
+        -- nothing and drop all events (the folder can sit installed on an alt harmlessly).
+        local _, class = UnitClass("player")
+        if class ~= "ROGUE" then
+            self:UnregisterAllEvents()
+            return
+        end
         -- Seed the DB HERE, not at ADDON_LOADED: on this client SavedVariables aren't
         -- loaded until after ADDON_LOADED, so touching the global that early would
         -- replace it with defaults and make the client skip loading the real saved
@@ -972,8 +1477,13 @@ ev:SetScript("OnEvent", function(self, event, arg1, arg2, arg3)
         RogueResourcesDB = ApplyDefaults(RR.defaults, RogueResourcesDB)
         RefreshSpellSets()      -- re-resolve spell names now that the spellbook is loaded
         RefreshPoisonNames()    -- re-resolve localized poison names
+        UpdateAutoSndMult()     -- detect the Improved Slice and Dice talent rank
         frame = BuildUI()
         BuildPoisonFrame(frame)
+        BuildSettingsPanel(frame)   -- register the Options -> AddOns panel up front
+        BuildMinimapButton(frame)
+        RegisterAddonCompartment(frame)
+        ApplyScale(frame)
         ApplyPosition(frame)
         ApplyPoisonPosition(frame)
         frame.poisonFrame:SetShown(not RogueResourcesDB.poisonHidden)
@@ -1003,8 +1513,10 @@ ev:SetScript("OnEvent", function(self, event, arg1, arg2, arg3)
         UpdateEnergy(frame)
         UpdateCP(frame)   -- retail carries CP as a player power, so refresh both
     elseif event == "SPELLS_CHANGED" then
-        LayoutIcons(frame)     -- show/hide icons as abilities are learned
-        PollCooldowns(frame)   -- catch any newly-known ability already on cooldown
+        LayoutIcons(frame)      -- show/hide icons as abilities are learned
+        PollCooldowns(frame)    -- catch any newly-known ability already on cooldown
+        UpdateAutoSndMult()     -- talents change spells too; re-detect the SnD rank
+        RefreshOptions(frame)   -- keep the options button caption current
     elseif event == "UNIT_INVENTORY_CHANGED" or event == "PLAYER_EQUIPMENT_CHANGED" then
         UpdatePoisons(frame)   -- poison applied/removed, or weapon swapped (icon + OH show)
     elseif event == "GET_ITEM_INFO_RECEIVED" then
@@ -1023,7 +1535,7 @@ ev:SetScript("OnEvent", function(self, event, arg1, arg2, arg3)
             if SND_CAST_IDS[arg3] then
                 local cp = cpEstimate
                 if cp < 1 then cp = 1 elseif cp > 5 then cp = 5 end
-                StartSnD(frame, CP_DURATION[cp] * (RogueResourcesDB.sndMult or 1))
+                StartSnD(frame, CP_DURATION[cp] * EffectiveSndMult())
                 cpEstimate = 0   -- finisher spent the combo points
             else
                 local name = SpellName(arg3)
@@ -1049,8 +1561,10 @@ SlashCmdList.ROGUERESOURCES = function(msg)
     msg = (msg or ""):lower():gsub("%s+", "")
     if msg == "lock" then
         SetLocked(frame, true)
+        RefreshOptions(frame)
     elseif msg == "unlock" then
         SetLocked(frame, false)
+        RefreshOptions(frame)
     elseif msg == "options" or msg == "config" or msg == "" then
         ToggleOptions(frame)
     elseif msg == "showall" then   -- temporary: preview every icon (resets on reload)
@@ -1063,19 +1577,51 @@ SlashCmdList.ROGUERESOURCES = function(msg)
         else
             RogueResourcesDB.poisonHidden = not RogueResourcesDB.poisonHidden
             frame.poisonFrame:SetShown(not RogueResourcesDB.poisonHidden)
+            RefreshOptions(frame)
             print("|cff00ff88RogueResources:|r poison icons " ..
                 (RogueResourcesDB.poisonHidden and "hidden." or "shown."))
         end
-    elseif msg:match("^sndmult") then
-        local n = tonumber(msg:match("sndmult(%d+%.?%d*)"))
-        if n and n > 0 then
-            RogueResourcesDB.sndMult = n
-            print("|cff00ff88RogueResources:|r Improved SnD multiplier set to " .. n .. " (x base duration).")
+    elseif msg == "minimap" then
+        RogueResourcesDB.minimapHidden = not RogueResourcesDB.minimapHidden
+        if frame.minimapButton then frame.minimapButton:SetShown(not RogueResourcesDB.minimapHidden) end
+        RefreshOptions(frame)
+        print("|cff00ff88RogueResources:|r minimap button " ..
+            (RogueResourcesDB.minimapHidden and "hidden." or "shown."))
+    elseif msg:match("^scale") then
+        local n = tonumber(msg:match("scale(%d+%.?%d*)"))
+        if n then
+            n = math.max(SCALE_MIN, math.min(SCALE_MAX, n))
+            RogueResourcesDB.scale = n
+            ApplyScale(frame)
+            RefreshOptions(frame)   -- reflect the new value in any open options view
+            print(("|cff00ff88RogueResources:|r scale set to %d%%."):format(math.floor(n * 100 + 0.5)))
         else
-            print("|cff00ff88RogueResources:|r current SnD multiplier " .. tostring(RogueResourcesDB.sndMult)
-                .. ". Usage: /rr sndmult 1.45")
+            print(("|cff00ff88RogueResources:|r current scale %d%%. Usage: /rr scale 1.25 (%d-%d%%)."):format(
+                math.floor((RogueResourcesDB.scale or 1) * 100 + 0.5),
+                math.floor(SCALE_MIN * 100), math.floor(SCALE_MAX * 100)))
+        end
+    elseif msg:match("^sndmult") then
+        if msg:match("auto") then
+            RogueResourcesDB.sndAuto = true
+            UpdateAutoSndMult()
+            RefreshOptions(frame)
+            print("|cff00ff88RogueResources:|r Improved SnD set to auto (" ..
+                (RR.autoSndMult and MultText(RR.autoSndMult) or "talent not found") .. ").")
+        else
+            local n = tonumber(msg:match("sndmult(%d+%.?%d*)"))
+            if n and n > 0 then
+                RogueResourcesDB.sndAuto = false
+                RogueResourcesDB.sndMult = n
+                RefreshOptions(frame)
+                print("|cff00ff88RogueResources:|r Improved SnD multiplier set to " .. n .. " (manual).")
+            else
+                print("|cff00ff88RogueResources:|r current SnD " ..
+                    (RogueResourcesDB.sndAuto and ("auto " .. (RR.autoSndMult and MultText(RR.autoSndMult) or "(not found)"))
+                        or ("manual " .. MultText(RogueResourcesDB.sndMult)))
+                    .. ". Usage: /rr sndmult 1.45 | /rr sndmult auto")
+            end
         end
     else
-        print("|cff00ff88RogueResources:|r /rr options | unlock | lock | poison | sndmult <1.0-1.45>")
+        print("|cff00ff88RogueResources:|r /rr options | unlock | lock | poison | minimap | scale <0.5-2.0> | sndmult <auto|1.0-1.45>")
     end
 end

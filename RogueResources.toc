@@ -2,7 +2,7 @@
 ## Title: Rogue Resources
 ## Notes: Energy, combo points, Slice and Dice, and ability cooldowns for Rogues
 ## Author: Konchius
-## Version: 1.1.1
+## Version: 1.2.0
 ## X-Curse-Project-ID: 1707275
 ## SavedVariables: RogueResourcesDB
 
