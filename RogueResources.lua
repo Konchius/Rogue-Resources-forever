@@ -208,6 +208,11 @@ local BLIND_IDS   = { 2094 }                     -- Blind
 local KIDNEY_IDS  = { 408, 8643 }                -- Kidney Shot ranks 1-2
 local GOUGE_IDS   = { 1776, 1777, 8629, 11285, 11286 }   -- Gouge ranks 1-5
 local SND_LIST    = { 5171, 6774 }               -- Slice and Dice ranks (for the known-check)
+-- Talent-granted cooldowns (only shown once the talent is taken, via the known-check).
+local COLDBLOOD_IDS     = { 14177 }              -- Cold Blood (Assassination)
+local PREPARATION_IDS   = { 14185 }              -- Preparation (Subtlety)
+local PREMEDITATION_IDS = { 14183 }              -- Premeditation (Subtlety)
+local GHOSTSTRIKE_IDS   = { 14278 }              -- Ghostly Strike (Subtlety)
 
 -- Pick the known rank from a candidate list (its cooldown reflects the shared CD).
 local function KnownID(ids)
@@ -239,6 +244,11 @@ local FALLBACK_WEAPON_TEX = "Interface\\Icons\\INV_Sword_04"
 
 local function HasWeapon(slot) return GetInventoryItemID and GetInventoryItemID("player", slot) ~= nil end
 local function WeaponTex(slot) return GetInventoryItemTexture and GetInventoryItemTexture("player", slot) end
+
+-- Rogues train Poisons at level 20, so there's nothing to track before then -- keep the
+-- poison frame hidden until the player can actually use poisons.
+local POISON_MIN_LEVEL = 20
+local function PoisonsAvailable() return (UnitLevel and UnitLevel("player") or 0) >= POISON_MIN_LEVEL end
 
 -- Poison types by internal key + rank-1 item id + English fallback (used only for the
 -- menu when a type isn't carried and can't be resolved yet).
@@ -518,6 +528,7 @@ end
 -- the chosen order is saved and reconciled against the real icon set on load.
 local DEFAULT_ORDER = {
     "snd", "evasion", "vanish", "kick", "sprint", "bladeflurry", "adrenaline", "blind", "kidney", "gouge",
+    "coldblood", "ghostlystrike", "premeditation", "preparation",
 }
 
 -- Make RogueResourcesDB.iconOrder a clean list of every existing icon key: kept in the
@@ -725,7 +736,7 @@ local function TogglePoisonFromOptions(f, check)
         return
     end
     RogueResourcesDB.poisonHidden = not check:GetChecked()
-    if f.poisonFrame then f.poisonFrame:SetShown(not RogueResourcesDB.poisonHidden) end
+    if f.poisonFrame then f.poisonFrame:SetShown(PoisonsAvailable() and not RogueResourcesDB.poisonHidden) end
 end
 
 -- One reorder/show-hide row, parented to a view's list container. Dragging a row
@@ -1191,10 +1202,16 @@ local function BuildUI()
     local blind      = AddCD("blind", BLIND_IDS)
     local kidney     = AddCD("kidney", KIDNEY_IDS)
     local gouge      = AddCD("gouge", GOUGE_IDS)
+    local coldblood     = AddCD("coldblood", COLDBLOOD_IDS)         -- Assassination talent
+    local ghostlystrike = AddCD("ghostlystrike", GHOSTSTRIKE_IDS)  -- Subtlety talent
+    local premeditation = AddCD("premeditation", PREMEDITATION_IDS)-- Subtlety talent
+    local preparation   = AddCD("preparation", PREPARATION_IDS)    -- Subtlety talent
 
     f.bar, f.text, f.cp, f.snd = bar, text, cp, snd
-    f.icons = { snd, evasion, vanish, kick, sprint, bladeflurry, adrenaline, blind, kidney, gouge }
-    f.cooldowns = { evasion, vanish, kick, sprint, bladeflurry, adrenaline, blind, kidney, gouge }
+    f.icons = { snd, evasion, vanish, kick, sprint, bladeflurry, adrenaline, blind, kidney, gouge,
+                coldblood, ghostlystrike, premeditation, preparation }
+    f.cooldowns = { evasion, vanish, kick, sprint, bladeflurry, adrenaline, blind, kidney, gouge,
+                    coldblood, ghostlystrike, premeditation, preparation }
     f.iconByKey = {}
     for _, o in ipairs(f.icons) do f.iconByKey[o.key] = o end
     -- Map every rank of each tracked ability to its icon, so a cast of ANY rank triggers
@@ -1243,6 +1260,25 @@ local function BuildPoisonFrame(f)
 
         b.icon, b.red, b.redPulse, b.mins = icon, red, pulse, mins
 
+        -- Live countdown: when b.expiry (absolute GetTime) is set, tick the label down
+        -- smoothly (minutes above 60s, seconds below), so it stays in sync with the buff
+        -- instead of only refreshing on the 2s poll. Throttled to ~0.1s.
+        b:SetScript("OnUpdate", function(self, elapsed)
+            if not self.expiry then return end
+            self._acc = (self._acc or 0) + elapsed
+            if self._acc < 0.1 then return end
+            self._acc = 0
+            local rem = self.expiry - GetTime()
+            if rem <= 0 then
+                self.expiry = nil
+                self.settleUntil = GetTime() + 3   -- brief window: ignore stale expiry-time blips
+                self.mins:SetText("")
+            else
+                self.mins:SetText(rem >= 60 and (math.floor(rem / 60) .. "m") or (math.ceil(rem) .. "s"))
+                if rem <= 120 then self.mins:SetTextColor(1, 0.5, 0.2) else self.mins:SetTextColor(1, 1, 1) end
+            end
+        end)
+
         -- Right-click opens the poison-choice menu (down only, once).
         b:SetScript("PostClick", function(self, button, down)
             if button == "RightButton" and down then OpenPoisonMenu(self) end
@@ -1288,9 +1324,41 @@ local function UpdateCP(f)
     f.cp:SetValue(GetCP())
 end
 
--- Update one weapon button: show the equipped weapon's texture, and reflect poison
--- state. `has` is the present-flag and `exp` the ms remaining (either may be secret,
--- so we guard). Poisoned -> normal icon + minutes; unpoisoned -> red tint + pulse.
+-- Format a remaining time (seconds) as "Nm" above a minute, "Ns" below it. Under two
+-- minutes it's tinted orange as a low warning.
+local function SetPoisonTime(o, sec)
+    if sec and sec > 0 then
+        if sec >= 60 then
+            o.mins:SetText(math.floor(sec / 60) .. "m")
+        else
+            o.mins:SetText(math.ceil(sec) .. "s")
+        end
+        if sec <= 120 then o.mins:SetTextColor(1, 0.5, 0.2) else o.mins:SetTextColor(1, 1, 1) end
+    else
+        o.mins:SetText("")
+    end
+end
+
+-- Set the countdown target (absolute GetTime) from a fresh remaining-seconds reading, but
+-- keep it smooth and blip-proof: while a timer is already running we ignore any SHORT
+-- (< 5 min) reading that isn't a clean decrease -- that covers the per-poll jitter AND the
+-- stale "~60s" value the client emits right at expiry. Only a full reapplication (which
+-- restores minutes of duration) restarts the timer. The per-frame OnUpdate does the ticking.
+local POISON_REFRESH_MIN = 300   -- seconds; a reading at/above this is treated as a reapply
+local function SetPoisonExpiry(o, cand)
+    if cand < POISON_REFRESH_MIN then
+        if o.expiry then
+            local cur = o.expiry - GetTime()
+            if cand > cur - 1 then return end          -- not a genuine tick-down: keep the timer
+        elseif o.settleUntil and GetTime() < o.settleUntil then
+            return                                      -- just expired: ignore stale short readings
+        end
+    end
+    o.expiry = GetTime() + cand
+    o.settleUntil = nil
+    SetPoisonTime(o, cand)
+end
+
 local function UpdatePoisonIcon(o, on, exp, tip)
     if not o then return end
     o.icon:SetTexture(WeaponTex(o.slot) or FALLBACK_WEAPON_TEX)
@@ -1299,24 +1367,32 @@ local function UpdatePoisonIcon(o, on, exp, tip)
         o.red:Hide()
         o.icon:SetVertexColor(1, 1, 1)
         if exp and not IsSecret(exp) and exp > 0 then
-            local m = math.ceil(exp / 60000)          -- ms -> whole minutes (API path)
-            o.mins:SetText(m .. "m")
-            o.mins:SetTextColor(m <= 2 and 1 or 1, m <= 2 and 0.5 or 1, m <= 2 and 0.2 or 1)
+            SetPoisonExpiry(o, exp / 1000)            -- precise remaining from the enchant API (ms)
         elseif tip then
-            local n = tonumber(tip:match("(%d+)"))    -- minutes (or charges) from the tooltip line
-            if n and tip:find("[Mm]in") then
-                o.mins:SetText(n .. "m")
-                if n <= 2 then o.mins:SetTextColor(1, 0.5, 0.2) else o.mins:SetTextColor(1, 1, 1) end
+            local n = tonumber(tip:match("(%d+)"))
+            if n and tip:find("[Ss]ec") then
+                SetPoisonExpiry(o, n)                 -- last minute: live-count the seconds
+            elseif n and tip:find("[Mm]in") then
+                -- Minute-granular from the tooltip. Ignore a small stale minute reading
+                -- during the settle window (so it can't blip right after expiry); a real
+                -- reapplication reads several minutes and still shows.
+                if not (o.settleUntil and GetTime() < o.settleUntil and n < 5) then
+                    o.expiry = nil
+                    SetPoisonTime(o, n * 60)
+                end
             elseif n then
-                o.mins:SetText(tostring(n))           -- charges or a bare count
-                o.mins:SetTextColor(1, 1, 1)
+                SetPoisonExpiry(o, n)                 -- bare number under a minute == seconds
             else
+                o.expiry = nil
                 o.mins:SetText("")
             end
         else
+            o.expiry = nil
             o.mins:SetText("")
         end
     else
+        o.expiry = nil
+        o.settleUntil = nil
         o.icon:SetVertexColor(1, 0.35, 0.35)
         o.mins:SetText("")
         o.red:Show()
@@ -1326,6 +1402,13 @@ end
 
 local function UpdatePoisons(f)
     if not f.poisonFrame then return end
+    -- Below level 20 (no Poisons skill) there's nothing to track: keep the frame hidden.
+    -- Secure-frame Show/Hide is only allowed out of combat, so gate on that.
+    local inCombat = InCombatLockdown and InCombatLockdown()
+    if not PoisonsAvailable() then
+        if not inCombat then f.poisonFrame:Hide() end
+        return
+    end
     local res = { pcall(GetWeaponEnchantInfo) }   -- ok, hasMH, mhExp, mhChg, mhID, hasOH, ohExp, ...
     -- Detect via the enchant API OR the weapon tooltip (the API doesn't report poisons
     -- on this client). Tooltip has no reliable timer, so exp comes only from the API.
@@ -1335,7 +1418,8 @@ local function UpdatePoisons(f)
     UpdatePoisonIcon(f.mhPoison, mhOn, res[1] and res[3] or nil, mhTip)
     UpdatePoisonIcon(f.ohPoison, ohOn, res[1] and res[7] or nil, ohTip)
     -- Secure-frame changes (Show/Hide, attributes) are only allowed out of combat.
-    if not (InCombatLockdown and InCombatLockdown()) then
+    if not inCombat then
+        f.poisonFrame:SetShown(not RogueResourcesDB.poisonHidden)   -- respect the user's toggle
         f.ohPoison:SetShown(HasWeapon(OFFHAND_SLOT))   -- hide OH when not dual-wielding
         ArmPoisonButton(f.mhPoison)
         ArmPoisonButton(f.ohPoison)
@@ -1452,6 +1536,8 @@ ev:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
 -- Re-lay-out the icon row when spells are learned/leveled, so newly-learned abilities
 -- (Vanish, Blade Flurry, Adrenaline Rush, ...) appear and unknown ones stay hidden.
 ev:RegisterEvent("SPELLS_CHANGED")
+-- Reveal the poison tracker when the rogue reaches the level that unlocks Poisons.
+ev:RegisterEvent("PLAYER_LEVEL_UP")
 -- Weapon poison changes: applying/removing a poison and swapping weapons.
 ev:RegisterEvent("UNIT_INVENTORY_CHANGED")
 ev:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
@@ -1486,7 +1572,7 @@ ev:SetScript("OnEvent", function(self, event, arg1, arg2, arg3)
         ApplyScale(frame)
         ApplyPosition(frame)
         ApplyPoisonPosition(frame)
-        frame.poisonFrame:SetShown(not RogueResourcesDB.poisonHidden)
+        frame.poisonFrame:SetShown(PoisonsAvailable() and not RogueResourcesDB.poisonHidden)
         SetLocked(frame, RogueResourcesDB.locked)
         UpdateEnergy(frame)
         UpdateCP(frame)
@@ -1517,8 +1603,9 @@ ev:SetScript("OnEvent", function(self, event, arg1, arg2, arg3)
         PollCooldowns(frame)    -- catch any newly-known ability already on cooldown
         UpdateAutoSndMult()     -- talents change spells too; re-detect the SnD rank
         RefreshOptions(frame)   -- keep the options button caption current
-    elseif event == "UNIT_INVENTORY_CHANGED" or event == "PLAYER_EQUIPMENT_CHANGED" then
-        UpdatePoisons(frame)   -- poison applied/removed, or weapon swapped (icon + OH show)
+    elseif event == "UNIT_INVENTORY_CHANGED" or event == "PLAYER_EQUIPMENT_CHANGED"
+        or event == "PLAYER_LEVEL_UP" then
+        UpdatePoisons(frame)   -- poison applied/removed, weapon swapped, or hit level 20
     elseif event == "GET_ITEM_INFO_RECEIVED" then
         RefreshPoisonNames()   -- a poison item cached; localized names are now available
         UpdatePoisons(frame)
@@ -1576,10 +1663,15 @@ SlashCmdList.ROGUERESOURCES = function(msg)
             print("|cff00ff88RogueResources:|r can't toggle poison icons in combat.")
         else
             RogueResourcesDB.poisonHidden = not RogueResourcesDB.poisonHidden
-            frame.poisonFrame:SetShown(not RogueResourcesDB.poisonHidden)
+            frame.poisonFrame:SetShown(PoisonsAvailable() and not RogueResourcesDB.poisonHidden)
             RefreshOptions(frame)
-            print("|cff00ff88RogueResources:|r poison icons " ..
-                (RogueResourcesDB.poisonHidden and "hidden." or "shown."))
+            if not PoisonsAvailable() then
+                print(("|cff00ff88RogueResources:|r poison preference saved; the tracker appears at level %d.")
+                    :format(POISON_MIN_LEVEL))
+            else
+                print("|cff00ff88RogueResources:|r poison icons " ..
+                    (RogueResourcesDB.poisonHidden and "hidden." or "shown."))
+            end
         end
     elseif msg == "minimap" then
         RogueResourcesDB.minimapHidden = not RogueResourcesDB.minimapHidden

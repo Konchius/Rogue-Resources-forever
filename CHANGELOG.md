@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.1
+
+- Added cooldown tracking for Cold Blood, Ghostly Strike, Premeditation, and Preparation.
+  Each shows only once you've taken the talent.
+- The weapon-poison tracker now stays hidden until level 20.
+- The poison timer counts down smoothly now.
+
 ## 1.2.0
 
 - Options now live in the built-in interface panel: **ESC → Options → AddOns →
